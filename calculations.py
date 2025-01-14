@@ -2,7 +2,8 @@
 
 from decimal import Decimal, getcontext
 
-getcontext().prec = 10  # Ustawiamy precyzję obliczeń dziesiętnych
+# Ustawiamy precyzję obliczeń dziesiętnych
+getcontext().prec = 10
 
 def calculate_monthly_rate(loan_amount, annual_interest_rate, loan_period_months):
     """
@@ -14,8 +15,10 @@ def calculate_monthly_rate(loan_amount, annual_interest_rate, loan_period_months
 
     monthly_interest_rate = annual_interest_rate / Decimal('12') / Decimal('100')
     if monthly_interest_rate == 0:
+        # Jeśli oprocentowanie roczne to 0%, to rata to po prostu kwota / liczba miesięcy
         return loan_amount / loan_period_months
     else:
+        # Wzór na ratę annuitetową
         rate = loan_amount * (monthly_interest_rate * (1 + monthly_interest_rate) ** loan_period_months) / \
                ((1 + monthly_interest_rate) ** loan_period_months - 1)
         return rate
@@ -41,36 +44,40 @@ def calculate_payment_schedule(loan_amount, interest_changes, loan_period_months
     change_index = 0
 
     for month in range(loan_period_months):
-        # Sprawdzamy, czy w tym miesiącu jest zmiana oprocentowania
-        if change_index + 1 < len(interest_changes) and month + 1 == interest_changes[change_index + 1][0]:
+        # Jeśli w tym miesiącu jest zmiana oprocentowania, zaktualizuj stawkę
+        if change_index + 1 < len(interest_changes) and (month + 1) == interest_changes[change_index + 1][0]:
             change_index += 1
             current_interest_rate = Decimal(interest_changes[change_index][1]) / Decimal('12') / Decimal('100')
         monthly_interest_rates[month] = current_interest_rate
 
     for installment_number in range(1, loan_period_months + 1):
         current_debt = remaining_balance
-
         monthly_interest_rate = monthly_interest_rates[installment_number - 1]
 
-        # Obliczamy ratę dla aktualnego salda i oprocentowania
+        # Liczba pozostałych okresów do końca kredytu
         remaining_periods = loan_period_months - installment_number + 1
-        monthly_rate = calculate_monthly_rate(remaining_balance, monthly_interest_rate * Decimal('12') * Decimal('100'), remaining_periods)
+        monthly_rate = calculate_monthly_rate(
+            remaining_balance,
+            monthly_interest_rate * Decimal('12') * Decimal('100'),
+            remaining_periods
+        )
 
         interest_payment = remaining_balance * monthly_interest_rate
         capital_payment = monthly_rate - interest_payment
 
-        # Sprawdzamy, czy nie przekroczymy pozostałego kapitału
+        # Sprawdzenie, czy nie przekroczymy pozostałego kapitału
         if remaining_balance < capital_payment:
             capital_payment = remaining_balance
             monthly_rate = capital_payment + interest_payment
 
         remaining_balance -= capital_payment
 
+        # W tej wersji brak nadpłaty
         overpayment = Decimal('0.00')
 
         installment = {
             'installment_number': installment_number,
-            'date': '',  # Data zostanie dodana w GUI
+            'date': '',  # Data zostanie nadana w GUI
             'interest_rate': round(monthly_interest_rate * Decimal('12') * Decimal('100'), 2),
             'current_debt': round(current_debt, 2),
             'installment_amount': round(monthly_rate, 2),
@@ -86,7 +93,9 @@ def calculate_payment_schedule(loan_amount, interest_changes, loan_period_months
 
     return schedule
 
-def calculate_payment_schedule_with_fixed_overpayment(loan_amount, interest_changes, loan_period_months, fixed_overpayment, additional_costs=0):
+def calculate_payment_schedule_with_fixed_overpayment(loan_amount, interest_changes,
+                                                      loan_period_months, fixed_overpayment,
+                                                      additional_costs=0):
     """
     Generuje harmonogram spłat kredytu z ratami stałymi (annuitetowymi) i stałą nadpłatą.
     Uwzględnia zmiany oprocentowania w czasie oraz dodatkowe koszty.
@@ -102,7 +111,7 @@ def calculate_payment_schedule_with_fixed_overpayment(loan_amount, interest_chan
     change_index = 0
 
     for month in range(loan_period_months):
-        if change_index + 1 < len(interest_changes) and month + 1 == interest_changes[change_index + 1][0]:
+        if change_index + 1 < len(interest_changes) and (month + 1) == interest_changes[change_index + 1][0]:
             change_index += 1
             current_interest_rate = Decimal(interest_changes[change_index][1]) / Decimal('12') / Decimal('100')
         monthly_interest_rates[month] = current_interest_rate
@@ -119,12 +128,16 @@ def calculate_payment_schedule_with_fixed_overpayment(loan_amount, interest_chan
         monthly_interest_rate = monthly_interest_rates[installment_number - 1]
 
         remaining_periods = loan_period_months - installment_number + 1
-        monthly_rate = calculate_monthly_rate(remaining_balance, monthly_interest_rate * Decimal('12') * Decimal('100'), remaining_periods)
+        monthly_rate = calculate_monthly_rate(
+            remaining_balance,
+            monthly_interest_rate * Decimal('12') * Decimal('100'),
+            remaining_periods
+        )
 
         interest_payment = remaining_balance * monthly_interest_rate
         capital_payment = monthly_rate - interest_payment
 
-        # Nadpłata
+        # Obliczamy kwotę nadpłaty
         overpayment = fixed_overpayment
         if remaining_balance - capital_payment < overpayment:
             overpayment = remaining_balance - capital_payment
@@ -152,12 +165,13 @@ def calculate_payment_schedule_with_fixed_overpayment(loan_amount, interest_chan
 
     return schedule
 
-def calculate_payment_schedule_mix_strategy(loan_amount, interest_changes, loan_period_months, total_monthly_payment, additional_costs=0):
+def calculate_payment_schedule_mix_strategy(loan_amount, interest_changes,
+                                            loan_period_months, total_monthly_payment,
+                                            additional_costs=0):
     """
-    Generuje harmonogram spłat kredytu według "Strategii mix", gdzie łączna płatność miesięczna jest stała
-    i równa kwocie podanej przez użytkownika. Nadpłata jest różnicą między podaną kwotą a aktualną ratą kredytu,
-    która zmniejsza się w wyniku nadpłat z poprzednich miesięcy.
-    Uwzględnia zmiany oprocentowania w czasie oraz dodatkowe koszty.
+    Generuje harmonogram spłat kredytu według "Strategii mix", gdzie łączna płatność
+    miesięczna jest równa kwocie podanej przez użytkownika. Nadpłata jest różnicą między
+    tą kwotą a aktualną ratą kredytu.
     """
     schedule = []
     remaining_balance = Decimal(loan_amount) + Decimal(additional_costs)
@@ -170,13 +184,17 @@ def calculate_payment_schedule_mix_strategy(loan_amount, interest_changes, loan_
     change_index = 0
 
     for month in range(loan_period_months):
-        if change_index + 1 < len(interest_changes) and month + 1 == interest_changes[change_index + 1][0]:
+        if change_index + 1 < len(interest_changes) and (month + 1) == interest_changes[change_index + 1][0]:
             change_index += 1
             current_interest_rate = Decimal(interest_changes[change_index][1]) / Decimal('12') / Decimal('100')
         monthly_interest_rates[month] = current_interest_rate
 
     # Sprawdzamy, czy podana kwota jest większa niż początkowa rata
-    initial_monthly_rate = calculate_monthly_rate(remaining_balance, interest_changes[0][1], loan_period_months)
+    initial_monthly_rate = calculate_monthly_rate(
+        remaining_balance,
+        interest_changes[0][1],
+        loan_period_months
+    )
     if total_monthly_payment <= initial_monthly_rate:
         raise ValueError("Kwota miesięczna musi być większa niż standardowa rata kredytu.")
 
@@ -192,12 +210,16 @@ def calculate_payment_schedule_mix_strategy(loan_amount, interest_changes, loan_
         monthly_interest_rate = monthly_interest_rates[installment_number - 1]
 
         remaining_periods = loan_period_months - installment_number + 1
-        monthly_rate = calculate_monthly_rate(remaining_balance, monthly_interest_rate * Decimal('12') * Decimal('100'), remaining_periods)
+        monthly_rate = calculate_monthly_rate(
+            remaining_balance,
+            monthly_interest_rate * Decimal('12') * Decimal('100'),
+            remaining_periods
+        )
 
         interest_payment = remaining_balance * monthly_interest_rate
         capital_payment = monthly_rate - interest_payment
 
-        # Nadpłata jest różnicą między podaną kwotą a aktualną ratą kredytu
+        # Nadpłata to różnica między podaną kwotą miesięczną a wyliczoną ratą
         overpayment = total_monthly_payment - monthly_rate
 
         # Sprawdzamy, czy nadpłata nie przekracza pozostałego kapitału
@@ -235,12 +257,8 @@ def calculate_savings(original_schedule, overpayment_schedule):
     :param overpayment_schedule: Harmonogram z nadpłatami.
     :return: Słownik z informacjami o oszczędnościach.
     """
-    original_interest = sum(
-        [inst["interest_payment"] for inst in original_schedule]
-    )
-    overpayment_interest = sum(
-        [inst["interest_payment"] for inst in overpayment_schedule]
-    )
+    original_interest = sum(inst["interest_payment"] for inst in original_schedule)
+    overpayment_interest = sum(inst["interest_payment"] for inst in overpayment_schedule)
     interest_savings = original_interest - overpayment_interest
 
     original_period = len(original_schedule)
